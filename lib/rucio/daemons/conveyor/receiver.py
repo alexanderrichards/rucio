@@ -59,6 +59,7 @@ class Receiver(ListenerBase):
         self.__id = id_
         self.__total_threads = total_threads
         self._transfer_stats_manager = transfer_stats_manager
+        self.heartbeats = (0, 0)
 
     @METRICS.count_it
     def on_message(self, frame):
