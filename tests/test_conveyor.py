@@ -640,7 +640,9 @@ def test_receiver_archiving(vo, did_factory, root_account, caches_mock, scitags_
 
             # Wait for the reception of the FTS Completion message for the submitted request
             request = request_core.get_request_by_did(rse_id=dst_rse_id, **did)
+            print("CHECK id", request["id"])
             for i in range(MAX_POLL_WAIT_SECONDS):
+                print("CHECK Received messages:", received_messages)
                 if request['id'] in received_messages:
                     break
                 if i == MAX_POLL_WAIT_SECONDS - 1:
