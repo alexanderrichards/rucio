@@ -27,7 +27,7 @@ import rucio.db.sqla.util
 from rucio.common import exception
 from rucio.common.logging import setup_logging, formatted_logger
 from rucio.common.stomp_utils import StompConnectionManager, ListenerBase
-from rucio.common.types import InternalScope
+from rucio.common.types import InternalScope, LoggerFunction
 from rucio.core.monitor import MetricManager
 from rucio.core.rse import get_rse_id
 from rucio.core.volatile_replica import add_volatile_replicas, delete_volatile_replicas
@@ -35,7 +35,6 @@ from rucio.core.volatile_replica import add_volatile_replicas, delete_volatile_r
 if TYPE_CHECKING:
     from types import FrameType
 
-    from stomp import Connection
     from stomp.utils import Frame
 
 logging.getLogger("stomp").setLevel(logging.CRITICAL)
@@ -56,7 +55,7 @@ class AMQConsumer(ListenerBase):
         on_message
         """
         try:
-            msg = json.loads(frame.body)
+            msg = json.loads(frame.body)  # type: ignore
             self._logger(logging.DEBUG, 'Message received: %s ' % msg)
             if isinstance(msg, dict) and 'operation' in msg.keys():
                 for f in msg['files']:
@@ -82,7 +81,7 @@ class AMQConsumer(ListenerBase):
             self._logger(logging.ERROR, str(format_exc()))
 
 
-def consumer(id_, num_thread=1, logger=logging.log):
+def consumer(id_: int, num_thread: int = 1, logger: LoggerFunction = logging.log) -> None:
     """
     Main loop to consume messages from the Rucio Cache producer.
     """
@@ -92,7 +91,7 @@ def consumer(id_, num_thread=1, logger=logging.log):
 
     logger(logging.INFO, 'consumer started')
 
-    conn_mgr.set_listener_factory('rucio-cache-consumer', AMQConsumer)
+    conn_mgr.set_listener_factory('rucio-cache-consumer', AMQConsumer, heartbeats=conn_mgr.config.heartbeats)
 
     while not GRACEFUL_STOP.is_set():
 

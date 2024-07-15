@@ -34,23 +34,17 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 import rucio.db.sqla.util
-from rucio.common.config import (
-    config_get,
-    config_get_bool,
-    config_get_list,
-)
-from rucio.common.stomp_utils import ListenerBase, StompConnectionManager
+from rucio.common.config import config_get, config_get_bool, config_get_list
 from rucio.common.exception import DatabaseException
 from rucio.common.logging import setup_logging
+from rucio.common.stomp_utils import ListenerBase, StompConnectionManager
 from rucio.core.message import delete_messages, retrieve_messages
 from rucio.core.monitor import MetricManager
 from rucio.daemons.common import run_daemon
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable
     from types import FrameType
-
-    from stomp.utils import Frame
 
     from rucio.common.types import LoggerFunction
     from rucio.daemons.common import HeartbeatHandler
@@ -79,7 +73,7 @@ class HermesListener(ListenerBase):
     """
 
 
-def deliver_emails(messages: list[dict], logger: "Callable") -> list:
+def deliver_emails(messages: "Iterable[dict[str, Any]]", logger: "LoggerFunction") -> list:
     """
     Sends emails
 
@@ -317,7 +311,7 @@ def run_once(heartbeat_handler: "HeartbeatHandler", bulk: int, **_kwargs) -> boo
     conns = None
     if "activemq" in services_list:
         conn_mgr = StompConnectionManager(config_section='messaging-hermes', logger=logger)
-        conn_mgr.set_listener_factory("rucio-hermes", HermesListener)
+        conn_mgr.set_listener_factory("rucio-hermes", HermesListener, heartbeats=conn_mgr.config.heartbeats)
 
     worker_number, total_workers, logger = heartbeat_handler.live()
     message_dict = {}

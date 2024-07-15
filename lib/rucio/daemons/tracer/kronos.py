@@ -15,6 +15,7 @@
 """
 This daemon consumes tracer messages from ActiveMQ and updates the atime for replicas.
 """
+from __future__ import annotations
 
 import functools
 import logging
@@ -26,13 +27,13 @@ from json import loads as jloads
 from queue import Queue
 from threading import Event, Thread
 from time import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import rucio.db.sqla.util
 from rucio.common.config import config_get, config_get_int
 from rucio.common.exception import DatabaseException, RSENotFound
-from rucio.common.logging import setup_logging, formatted_logger
-from rucio.common.stomp_utils import StompConnectionManager, ListenerBase
+from rucio.common.logging import formatted_logger, setup_logging
+from rucio.common.stomp_utils import ListenerBase, StompConnectionManager
 from rucio.common.stopwatch import Stopwatch
 from rucio.common.types import InternalAccount, InternalScope, LoggerFunction
 from rucio.core.did import list_parent_dids, touch_dids
@@ -47,8 +48,9 @@ if TYPE_CHECKING:
     from collections.abc import Set
     from types import FrameType
 
-    from stomp import Connection
     from stomp.utils import Frame
+
+    from rucio.common.stomp_utils import Connection
 
 
 logging.getLogger("stomp").setLevel(logging.CRITICAL)
@@ -60,10 +62,17 @@ graceful_stop = Event()
 class AMQConsumer(ListenerBase):
     """ActiveMQ message consumer"""
 
-    def __init__(self, conn, queue, chunksize, subscription_id,
-                 excluded_usrdns, dataset_queue, bad_files_patterns,
-                 logger=logging.log):
-        super().__init__(conn=conn, logger=logger)
+    def __init__(self,
+                 conn: Connection,
+                 queue: str,
+                 chunksize: int,
+                 subscription_id: str,
+                 excluded_usrdns: Set[str],
+                 dataset_queue: Queue,
+                 bad_files_patterns: list[re.Pattern],
+                 logger: LoggerFunction = logging.log,
+                 **kwargs: dict) -> None:
+        super().__init__(conn=conn, logger=logger, **kwargs)
         self.__queue = queue
         self.__reports = []
         self.__ids = []
@@ -292,7 +301,10 @@ class AMQConsumer(ListenerBase):
         METRICS.counter('updated_replicas').inc()
 
 
-def kronos_file(once: bool = False, dataset_queue: Queue = None, sleep_time: int = 60, logger=logging.log):
+def kronos_file(once: bool = False,
+                dataset_queue: Queue | None = None,
+                sleep_time: int = 60,
+                logger: LoggerFunction = logging.log) -> None:
     """
     Main loop to consume tracer reports.
     """
@@ -320,7 +332,8 @@ def kronos_file(once: bool = False, dataset_queue: Queue = None, sleep_time: int
                                          subscription_id=subscription_id,
                                          excluded_usrdns=excluded_usrdns,
                                          dataset_queue=dataset_queue,
-                                         bad_files_patterns=bad_files_patterns)
+                                         bad_files_patterns=bad_files_patterns,
+                                         heartbeats=stomp_conn_mngr.config.heartbeats)
 
     run_daemon(
         once=once,
@@ -338,7 +351,11 @@ def kronos_file(once: bool = False, dataset_queue: Queue = None, sleep_time: int
     stomp_conn_mngr.disconnect()
 
 
-def run_once_kronos_file(heartbeat_handler: HeartbeatHandler, stomp_conn_mngr: StompConnectionManager, dataset_queue: Queue, sleep_time: int, **kwargs) -> None:
+def run_once_kronos_file(heartbeat_handler: HeartbeatHandler,
+                         stomp_conn_mngr: StompConnectionManager,
+                         dataset_queue: Queue,
+                         sleep_time: int,
+                         **kwargs: dict) -> None:
     """
     Run the amq consumer once.
     """
@@ -366,10 +383,16 @@ def kronos_dataset(dataset_queue: Queue, once: bool = False, sleep_time: int = 6
     )
 
     # once again for potential backlog
-    run_once_kronos_dataset(dataset_queue=dataset_queue, return_values=return_values, heartbeat_handler=return_values['heartbeat_handler'], sleep_time=sleep_time)
+    run_once_kronos_dataset(dataset_queue=dataset_queue,
+                            return_values=return_values,
+                            heartbeat_handler=return_values['heartbeat_handler'],
+                            sleep_time=sleep_time)
 
 
-def run_once_kronos_dataset(dataset_queue: Queue, return_values: dict, heartbeat_handler: HeartbeatHandler, **kwargs) -> None:
+def run_once_kronos_dataset(dataset_queue: Queue,
+                            return_values: dict,
+                            heartbeat_handler: HeartbeatHandler | None,
+                            **kwargs) -> None:
     if heartbeat_handler is None:
         if "heartbeat_handler" not in return_values.keys():
             return_values["heartbeat_handler"] = HeartbeatHandler("kronos-dataset", 10)
@@ -439,7 +462,7 @@ def run_once_kronos_dataset(dataset_queue: Queue, return_values: dict, heartbeat
     logger(logging.INFO, 'update done for %d collection replicas, %d failed (%ds)' % (total, failed, time() - start))
 
 
-def stop(signum: Optional[int] = None, frame: Optional["FrameType"] = None) -> None:
+def stop(signum: int | None = None, frame: FrameType | None = None) -> None:
     """
     Graceful exit.
     """
