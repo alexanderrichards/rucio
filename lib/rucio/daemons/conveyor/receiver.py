@@ -15,19 +15,20 @@
 """
 Conveyor is a daemon to manage file transfers.
 """
+from __future__ import annotations
 
 import json
 import logging
 import threading
 import time
 import traceback
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import rucio.db.sqla.util
 from rucio.common import exception
-from rucio.common.logging import setup_logging, formatted_logger
+from rucio.common.logging import formatted_logger, setup_logging
 from rucio.common.policy import get_policy
-from rucio.common.stomp_utils import StompConnectionManager, ListenerBase
+from rucio.common.stomp_utils import Connection, ListenerBase, StompConnectionManager
 from rucio.core import request as request_core
 from rucio.core import transfer as transfer_core
 from rucio.core.monitor import MetricManager
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
     from types import FrameType
 
     from sqlalchemy.orm import Session
-    from stomp.utils import Frame
 
     from rucio.common.types import LoggerFunction
 
@@ -52,17 +52,23 @@ DAEMON_NAME = 'conveyor-receiver'
 
 class Receiver(ListenerBase):
 
-    def __init__(self, conn, id_, total_threads, transfer_stats_manager: request_core.TransferStatsManager,
-                 all_vos=False, logger=logging.log):
-        super().__init__(conn, logger)
+    def __init__(self,
+                 conn: Connection,
+                 id_: str,
+                 total_threads: int,
+                 transfer_stats_manager: request_core.TransferStatsManager,
+                 all_vos: bool = False,
+                 logger: LoggerFunction = logging.log,
+                 **kwargs: dict) -> None:
+        super().__init__(conn, logger, **kwargs)
         self.__all_vos = all_vos
         self.__id = id_
         self.__total_threads = total_threads
         self._transfer_stats_manager = transfer_stats_manager
-        self.heartbeats = (0, 0)
+        # self.heartbeats = (0, 0)
 
     @METRICS.count_it
-    def on_message(self, frame):
+    def on_message(self, frame) -> None:
         msg = json.loads(frame.body)
 
         if not self.__all_vos:
@@ -84,9 +90,10 @@ class Receiver(ListenerBase):
         self,
         msg: dict[str, Any],
         *,
-        session: Optional["Session"] = None,
-        logger: "LoggerFunction" = logging.log
+        session: Session | None,
+        logger: LoggerFunction = logging.log
     ) -> None:
+        print("CHECKME!!! didnt wrap!!")
         external_host = msg.get('endpnt', None)
         request_id = msg['file_metadata'].get('request_id', None)
         try:
@@ -108,7 +115,10 @@ class Receiver(ListenerBase):
             logging.critical(traceback.format_exc())
 
 
-def receiver(id_, total_threads=1, all_vos=False, logger=logging.log):
+def receiver(id_: str,
+             total_threads: int = 1,
+             all_vos: bool = False,
+             logger: LoggerFunction = logging.log):
     """
     Main loop to consume messages from the FTS3 producer.
     """
@@ -121,11 +131,13 @@ def receiver(id_, total_threads=1, all_vos=False, logger=logging.log):
     with (HeartbeatHandler(executable=DAEMON_NAME, renewal_interval=30),
           request_core.TransferStatsManager() as transfer_stats_manager):
 
+        print("CHECKME!!!", type(Receiver), id(Receiver), Receiver)
         conn_mgr.set_listener_factory('rucio-messaging-fts3', Receiver,
                                       id_=id_,
                                       total_threads=total_threads,
                                       transfer_stats_manager=transfer_stats_manager,
-                                      all_vos=all_vos)
+                                      all_vos=all_vos,
+                                      heartbeats=conn_mgr.config.heartbeats)
 
         while not GRACEFUL_STOP.is_set():
 
@@ -136,7 +148,7 @@ def receiver(id_, total_threads=1, all_vos=False, logger=logging.log):
         conn_mgr.disconnect()
 
 
-def stop(signum: Optional[int] = None, frame: Optional["FrameType"] = None) -> None:
+def stop(signum: int | None = None, frame: FrameType | None = None) -> None:
     """
     Graceful exit.
     """

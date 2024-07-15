@@ -16,26 +16,31 @@
 Common utility functions for stomp connections
 """
 from __future__ import annotations
-import logging
+
 import json
+import logging
 import random
 import socket
-from time import monotonic
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
+from time import monotonic
 from typing import TYPE_CHECKING
 
-from stomp import Connection12, ConnectionListener
+from stomp import Connection12
 from stomp.exception import ConnectFailedException, NotConnectedException
+from stomp.listener import HeartbeatListener
 
-from rucio.core.monitor import MetricManager
+from rucio.common.config import config_get, config_get_bool, config_get_float, config_get_int, config_get_list
 from rucio.common.logging import formatted_logger
-from rucio.common.config import (config_get, config_get_bool, config_get_int,
-                                 config_get_float, config_get_list)
+from rucio.core.monitor import MetricManager
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Callable
+    from collections.abc import Generator
+
     from stomp.connect import Frame
+
+    from rucio.common.types import LoggerFunction
 
 
 METRICS = MetricManager(module=__name__)
@@ -72,14 +77,14 @@ class Connection(Connection12):
         return self._brokers
 
 
-class ListenerBase(ConnectionListener):
+class ListenerBase(HeartbeatListener):
     """Listener Base."""
 
     _logger = formatted_logger(logging.log, 'ListenerBase %s')
 
     def __init__(self,
                  conn: Connection,
-                 logger: None | Callable = None,
+                 logger: None | LoggerFunction = None,
                  **kwargs):
         """
         Initialise.
@@ -91,7 +96,7 @@ class ListenerBase(ConnectionListener):
         Kwargs:
             Arguments to pass to the stomp.ConnectionListener base class.
         """
-        super().__init__(**kwargs)
+        super().__init__(transport=conn.transport, **kwargs)
         self._conn = conn
         if logger is not None:
             self._logger = logger
@@ -121,7 +126,7 @@ class StompConnectionManager:
 
     def __init__(self,
                  config_section: str,
-                 logger: None | Callable = None):
+                 logger: None | LoggerFunction = None):
         """
         Initialise.
 
@@ -143,6 +148,16 @@ class StompConnectionManager:
             if self._config.use_ssl:
                 conn.set_ssl(cert_file=self._config.cert_file, key_file=self._config.key_file)
             self._conns.append(conn)
+
+    @property
+    def config(self) -> StompConfig:
+        """
+        Get the config.
+
+        Returns:
+            StompConfig: config object.
+        """
+        return deepcopy(self._config)
 
     def set_listener_factory(self, name: str, listener_cls: type, **kwargs):
         """
@@ -272,7 +287,8 @@ class StompConnectionManager:
             Generator[Connection, None, None]: Each connection object after ensuring it's connected.
         """
         config = self._config
-        params = {'wait': True}
+        params = {'wait': True, "heartbeats": self._config.heartbeats}
+        self._logger(logging.WARNING, 'heartbeats: %s', self._config.heartbeats)
         if config.use_ssl:
             params.update(username=config.username, password=config.password)
 
