@@ -305,8 +305,8 @@ class StompConnectionManager:
                 try:
                     conn.connect(**params)
                 except ConnectFailedException as error:
-                    self._logger(logging.WARNING, "[broker] Could not deliver message due to "
-                                                  "ConnectFailedException: %s", str(error))
+                    self._logger(logging.WARNING, f"[broker] Could not deliver message due to "
+                                                   "ConnectFailedException: {str(error)}")
                     continue
                 except Exception as error:
                     self._logger(logging.ERROR, "[broker] Could not connect: %s", str(error))
