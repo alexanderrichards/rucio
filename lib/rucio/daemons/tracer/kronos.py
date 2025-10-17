@@ -29,8 +29,7 @@ from time import time
 from typing import TYPE_CHECKING, Optional
 
 import rucio.db.sqla.util
-from rucio.common.config import (config_get, config_get_bool, config_get_int,
-                                 config_get_list)
+from rucio.common.config import config_get, config_get_bool, config_get_int, config_get_list
 from rucio.common.constants import DEFAULT_VO
 from rucio.common.exception import DatabaseException, RSENotFound
 from rucio.common.logging import setup_logging
@@ -40,8 +39,7 @@ from rucio.common.types import InternalAccount, InternalScope, LoggerFunction
 from rucio.core.did import list_parent_dids, touch_dids
 from rucio.core.lock import touch_dataset_locks
 from rucio.core.monitor import MetricManager
-from rucio.core.replica import (declare_bad_file_replicas,
-                                touch_collection_replicas, touch_replica)
+from rucio.core.replica import declare_bad_file_replicas, touch_collection_replicas, touch_replica
 from rucio.core.rse import get_rse_id
 from rucio.daemons.common import HeartbeatHandler, run_daemon
 from rucio.db.sqla.constants import BadFilesStatus, DIDType

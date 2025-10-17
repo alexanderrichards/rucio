@@ -37,8 +37,12 @@ import stomp
 from requests.auth import HTTPBasicAuth
 
 import rucio.db.sqla.util
-from rucio.common.config import (config_get, config_get_bool, config_get_int,
-                                 config_get_list)
+from rucio.common.config import (
+    config_get,
+    config_get_bool,
+    config_get_int,
+    config_get_list
+)
 from rucio.common.exception import DatabaseException
 from rucio.common.logging import setup_logging
 from rucio.common.stomp_controller import StompController

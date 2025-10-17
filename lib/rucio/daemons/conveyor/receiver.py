@@ -25,8 +25,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import rucio.db.sqla.util
 from rucio.common import exception
-from rucio.common.config import (config_get, config_get_bool, config_get_int,
-                                 config_get_list)
+from rucio.common.config import config_get, config_get_bool, config_get_int, config_get_list
 from rucio.common.logging import setup_logging
 from rucio.common.policy import get_policy
 from rucio.common.stomp_controller import StompController
