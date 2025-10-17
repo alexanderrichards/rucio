@@ -29,7 +29,7 @@ class StompController:
 
     def __init__(
         self,
-        brokers: Sequence[str],
+        brokers: "Sequence[str]",
         port: int,
         use_ssl: bool = True,
         vhost: Optional[str] = None,
@@ -39,7 +39,7 @@ class StompController:
         ssl_cert_file: Optional[str] = None,
         timeout: Optional[int] = None,
         reconnect_attempts: int = 999,
-        logger: Callable = logging.log,
+        logger: "Callable" = logging.log,
     ):
         self.logger = logger
         self.brokers = brokers
