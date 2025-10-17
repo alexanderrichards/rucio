@@ -37,6 +37,7 @@ from rucio.core.monitor import MetricManager
 from rucio.daemons.common import HeartbeatHandler
 from rucio.db.sqla.session import transactional_session
 from rucio.transfertool.fts3 import FTS3CompletionMessageTransferStatusReport
+from rucio.common.stomp_controller import StompController
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -131,51 +132,34 @@ def receiver(
 
     logging.info('receiver starting')
 
-    brokers_alias = []
-    brokers_resolved = []
-    try:
-        brokers_alias = config_get_list('messaging-fts3', 'brokers')
-    except Exception:
-        raise Exception('Could not load brokers from configuration')
-
-    logging.info('resolving broker dns alias: %s' % brokers_alias)
-
-    brokers_resolved = []
-    for broker in brokers_alias:
-        addrinfos = socket.getaddrinfo(broker, 0, socket.AF_INET, 0, socket.IPPROTO_TCP)
-        brokers_resolved.extend(ai[4][0] for ai in addrinfos)
-
-    logging.info('brokers resolved to %s', brokers_resolved)
-
-    logging.info('checking authentication method')
-    use_ssl = True
-    try:
-        use_ssl = config_get_bool('messaging-fts3', 'use_ssl')
-    except Exception:
-        logging.info('could not find use_ssl in configuration -- please update your rucio.cfg')
-
-    port = config_get_int('messaging-fts3', 'port')
-    vhost = config_get('messaging-fts3', 'broker_virtual_host', raise_exception=False)
+    brokers = config_get_list('messaging-fts3', 'brokers')
+    use_ssl = config_get_bool('messaging-fts3', 'use_ssl', default=True)
+    username = password = None
     if not use_ssl:
         username = config_get('messaging-fts3', 'username')
         password = config_get('messaging-fts3', 'password')
         port = config_get_int('messaging-fts3', 'nonssl_port')
+    else:
+        port = config_get_int('messaging-fts3', 'port')
+    vhost = config_get('messaging-fts3', 'broker_virtual_host', raise_exception=False)
+    ssl_key_file = config_get('messaging-fts3', 'ssl_key_file', raise_exception=False)
+    ssl_cert_file = config_get('messaging-fts3', 'ssl_cert_file', raise_exception=False)
+    destination = config_get('messaging-fts3', 'destination')
 
-    conns = []
-    for broker in brokers_resolved:
-        if not use_ssl:
-            logging.info('setting up username/password authentication: %s' % broker)
-        else:
-            logging.info('setting up ssl cert/key authentication: %s' % broker)
-        con = stomp.Connection12(host_and_ports=[(broker, port)],
-                                 vhost=vhost,
-                                 reconnect_attempts_max=999)
-        if use_ssl:
-            con.set_ssl(
-                key_file=config_get('messaging-fts3', 'ssl_key_file'),
-                cert_file=config_get('messaging-fts3', 'ssl_cert_file'),
-            )
-        conns.append(con)
+    controller = StompController(
+        brokers=brokers,
+        port=port,
+        use_ssl=use_ssl,
+        vhost=vhost,
+        username=username,
+        password=password,
+        ssl_key_file=ssl_key_file,
+        ssl_cert_file=ssl_cert_file,
+        timeout=None,
+        reconnect_attempts=999,
+        logger=logging.log
+    )
+    controller.setup_connections()
 
     logging.info('receiver started')
 
@@ -185,35 +169,21 @@ def receiver(
 
             _, _, logger = heartbeat_handler.live()
 
-            for conn in conns:
-
-                if not conn.is_connected():
-                    logger(logging.INFO, 'connecting to %s' % conn.transport._Transport__host_and_ports[0][0])
-                    METRICS.counter('reconnect.{host}').labels(host=conn.transport._Transport__host_and_ports[0][0].split('.')[0]).inc()
-
-                    conn.set_listener(
-                        'rucio-messaging-fts3',
-                        Receiver(
-                            broker=conn.transport._Transport__host_and_ports[0],
-                            id_=id_,
-                            total_threads=total_threads,
-                            transfer_stats_manager=transfer_stats_manager,
-                            all_vos=all_vos
-                        ))
-                    if not use_ssl:
-                        conn.connect(username, password, wait=True)
-                    else:
-                        conn.connect(wait=True)
-                    conn.subscribe(destination=config_get('messaging-fts3', 'destination'),
-                                   id='rucio-messaging-fts3',
-                                   ack='auto')
+            controller.connect_and_subscribe(
+                destination=destination,
+                listener=Receiver(
+                    broker=brokers[0],
+                    id_=id_,
+                    total_threads=total_threads,
+                    transfer_stats_manager=transfer_stats_manager,
+                    all_vos=all_vos
+                ),
+                subscription_id='rucio-messaging-fts3',
+                ack='auto'
+            )
             time.sleep(1)
 
-        for conn in conns:
-            try:
-                conn.disconnect()
-            except Exception:
-                pass
+        controller.disconnect()
 
 
 def stop(signum: Optional[int] = None, frame: Optional["FrameType"] = None) -> None:
