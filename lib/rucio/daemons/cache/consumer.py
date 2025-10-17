@@ -118,7 +118,8 @@ def consumer(id_: int, num_thread: int = 1) -> None:
 
     brokers = config_get_list('messaging-cache', 'brokers')
     use_ssl = config_get_bool('messaging-cache', 'use_ssl', default=True, raise_exception=False)
-    username = password = None
+    username = None
+    password = None
     if not use_ssl:
         username = config_get('messaging-cache', 'username')
         password = config_get('messaging-cache', 'password')

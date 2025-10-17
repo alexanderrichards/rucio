@@ -24,7 +24,6 @@ import logging
 import random
 import re
 import smtplib
-import socket
 import ssl
 import sys
 import threading
@@ -38,18 +37,14 @@ import stomp
 from requests.auth import HTTPBasicAuth
 
 import rucio.db.sqla.util
-from rucio.common.config import (
-    config_get,
-    config_get_bool,
-    config_get_int,
-    config_get_list,
-)
+from rucio.common.config import (config_get, config_get_bool, config_get_int,
+                                 config_get_list)
 from rucio.common.exception import DatabaseException
 from rucio.common.logging import setup_logging
+from rucio.common.stomp_controller import StompController
 from rucio.core.message import delete_messages, retrieve_messages
 from rucio.core.monitor import MetricManager
 from rucio.daemons.common import run_daemon
-from rucio.common.stomp_controller import StompController
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -114,7 +109,8 @@ def setup_activemq(
     use_ssl = config_get_bool("messaging-hermes", "use_ssl", default=True)
     port = config_get_int("messaging-hermes", "port")
     vhost = config_get("messaging-hermes", "broker_virtual_host", raise_exception=False)
-    username = password = None
+    username = None
+    password = None
     if not use_ssl:
         username = config_get("messaging-hermes", "username")
         password = config_get("messaging-hermes", "password")

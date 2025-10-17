@@ -18,26 +18,24 @@ Conveyor is a daemon to manage file transfers.
 
 import json
 import logging
-import socket
 import threading
 import time
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
-import stomp
-
 import rucio.db.sqla.util
 from rucio.common import exception
-from rucio.common.config import config_get, config_get_bool, config_get_int, config_get_list
+from rucio.common.config import (config_get, config_get_bool, config_get_int,
+                                 config_get_list)
 from rucio.common.logging import setup_logging
 from rucio.common.policy import get_policy
+from rucio.common.stomp_controller import StompController
 from rucio.core import request as request_core
 from rucio.core import transfer as transfer_core
 from rucio.core.monitor import MetricManager
 from rucio.daemons.common import HeartbeatHandler
 from rucio.db.sqla.session import transactional_session
 from rucio.transfertool.fts3 import FTS3CompletionMessageTransferStatusReport
-from rucio.common.stomp_controller import StompController
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -134,7 +132,8 @@ def receiver(
 
     brokers = config_get_list('messaging-fts3', 'brokers')
     use_ssl = config_get_bool('messaging-fts3', 'use_ssl', default=True)
-    username = password = None
+    username = None
+    password = None
     if not use_ssl:
         username = config_get('messaging-fts3', 'username')
         password = config_get('messaging-fts3', 'password')

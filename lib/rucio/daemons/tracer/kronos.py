@@ -321,7 +321,6 @@ def kronos_file(
     """
     Main loop to consume tracer reports.
     """
-    stomp_conn_mngr = StompConnectionManager()
     run_daemon(
         once=once,
         graceful_stop=graceful_stop,
@@ -330,15 +329,16 @@ def kronos_file(
         sleep_time=sleep_time,
         run_once_fnc=functools.partial(
             run_once_kronos_file,
-            stomp_conn_mngr=stomp_conn_mngr,
             dataset_queue=dataset_queue,  # type: ignore
             sleep_time=sleep_time,
         )
     )
-    stomp_conn_mngr.disconnect()
 
 
-def run_once_kronos_file(heartbeat_handler: HeartbeatHandler, stomp_conn_mngr, dataset_queue: Queue, sleep_time: int, **kwargs) -> None:
+def run_once_kronos_file(heartbeat_handler: HeartbeatHandler,
+                         dataset_queue: Queue,
+                         sleep_time: int,
+                         **kwargs) -> None:
     """
     Run the amq consumer once.
     """
@@ -361,7 +361,8 @@ def run_once_kronos_file(heartbeat_handler: HeartbeatHandler, stomp_conn_mngr, d
         bad_files_patterns = []
 
     use_ssl = config_get_bool('tracer-kronos', 'use_ssl', default=True, raise_exception=False)
-    username = password = None
+    username = None
+    password = None
     if not use_ssl:
         username = config_get('tracer-kronos', 'username')
         password = config_get('tracer-kronos', 'password')
@@ -408,7 +409,7 @@ def run_once_kronos_file(heartbeat_handler: HeartbeatHandler, stomp_conn_mngr, d
             ack='client-individual',
             headers={'activemq.prefetchSize': prefetch_size}
         )
-
+    controller.disconnect()
 
 def kronos_dataset(dataset_queue: Queue, once: bool = False, sleep_time: int = 60) -> None:
     return_values = {'heartbeat_handler': HeartbeatHandler("kronos-dataset", 10)}
