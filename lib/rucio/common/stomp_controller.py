@@ -1,8 +1,10 @@
-import socket
 import logging
-from typing import Any, Callable, Optional, Sequence
+import socket
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import stomp
+
 
 class StompController:
     """
